@@ -4,15 +4,13 @@
  * see: http://github.com/requirejs/text for details
  */
 /*jslint regexp: true */
-/*global require, XMLHttpRequest, ActiveXObject,
-  define, window, process, Packages,
-  java, location, Components, FileUtils */
+/*global require, XMLHttpRequest,
+  define, window, process */
 
 define(['module'], function (module) {
     'use strict';
 
     var text, fs, Cc, Ci,
-        progIds = ['Msxml2.XMLHTTP', 'Microsoft.XMLHTTP', 'Msxml2.XMLHTTP.4.0'],
         xmlRegExp = /^\s*<\?xml(\s)+version=[\'\"](\d)*.(\d)*[\'\"](\s)*\?>/im,
         bodyRegExp = /<body[^>]*>\s*([\s\S]+)\s*<\/body>/im,
         hasLocation = typeof location !== 'undefined' && location.href,
@@ -53,25 +51,7 @@ define(['module'], function (module) {
         },
 
         createXhr: masterConfig.createXhr || function () {
-            //Would love to dump the ActiveX crap in here. Need IE 6 to die first.
-            var xhr, i, progId;
-            if (typeof XMLHttpRequest !== "undefined") {
-                return new XMLHttpRequest();
-            } else if (typeof ActiveXObject !== "undefined") {
-                for (i = 0; i < 3; i += 1) {
-                    progId = progIds[i];
-                    try {
-                        xhr = new ActiveXObject(progId);
-                    } catch (e) {}
-
-                    if (xhr) {
-                        progIds = [progId];  // so faster next time
-                        break;
-                    }
-                }
-            }
-
-            return xhr;
+            return new XMLHttpRequest();
         },
 
         /**
@@ -290,77 +270,6 @@ define(['module'], function (module) {
                 }
             };
             xhr.send(null);
-        };
-    } else if (masterConfig.env === 'rhino' || (!masterConfig.env &&
-            typeof Packages !== 'undefined' && typeof java !== 'undefined')) {
-        //Why Java, why is this so awkward?
-        text.get = function (url, callback) {
-            var stringBuffer, line,
-                encoding = "utf-8",
-                file = new java.io.File(url),
-                lineSeparator = java.lang.System.getProperty("line.separator"),
-                input = new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(file), encoding)),
-                content = '';
-            try {
-                stringBuffer = new java.lang.StringBuffer();
-                line = input.readLine();
-
-                // Byte Order Mark (BOM) - The Unicode Standard, version 3.0, page 324
-                // http://www.unicode.org/faq/utf_bom.html
-
-                // Note that when we use utf-8, the BOM should appear as "EF BB BF", but it doesn't due to this bug in the JDK:
-                // http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4508058
-                if (line && line.length() && line.charAt(0) === 0xfeff) {
-                    // Eat the BOM, since we've already found the encoding on this file,
-                    // and we plan to concatenating this buffer with others; the BOM should
-                    // only appear at the top of a file.
-                    line = line.substring(1);
-                }
-
-                stringBuffer.append(line);
-
-                while ((line = input.readLine()) !== null) {
-                    stringBuffer.append(lineSeparator);
-                    stringBuffer.append(line);
-                }
-                //Make sure we return a JavaScript string and not a Java string.
-                content = String(stringBuffer.toString()); //String
-            } finally {
-                input.close();
-            }
-            callback(content);
-        };
-    } else if (masterConfig.env === 'xpconnect' || (!masterConfig.env &&
-            typeof Components !== 'undefined' && Components.classes &&
-            Components.interfaces)) {
-        //Avert your gaze!
-        Cc = Components.classes,
-        Ci = Components.interfaces;
-        Components.utils['import']('resource://gre/modules/FileUtils.jsm');
-
-        text.get = function (url, callback) {
-            var inStream, convertStream,
-                readData = {},
-                fileObj = new FileUtils.File(url);
-
-            //XPCOM, you so crazy
-            try {
-                inStream = Cc['@mozilla.org/network/file-input-stream;1']
-                           .createInstance(Ci.nsIFileInputStream);
-                inStream.init(fileObj, 1, 0, false);
-
-                convertStream = Cc['@mozilla.org/intl/converter-input-stream;1']
-                                .createInstance(Ci.nsIConverterInputStream);
-                convertStream.init(inStream, "utf-8", inStream.available(),
-                Ci.nsIConverterInputStream.DEFAULT_REPLACEMENT_CHARACTER);
-
-                convertStream.readString(inStream.available(), readData);
-                convertStream.close();
-                inStream.close();
-                callback(readData.value);
-            } catch (e) {
-                throw new Error((fileObj && fileObj.path || '') + ': ' + e);
-            }
         };
     }
     return text;
