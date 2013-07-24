@@ -1,0 +1,3 @@
+# ignore editor bak files
+*~
+*.bak
