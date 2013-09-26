@@ -293,6 +293,9 @@ define('require/text', ['module'], function (module) {
                         errback(err);
                     } else {
                         callback(xhr.responseText);
+
+			  // Adding the abort call to fix a Memory Leak issue in IE8 v8.0.6001.18702CO.
+                        xhr.abort();
                     }
 
                     if (masterConfig.onXhrComplete) {
