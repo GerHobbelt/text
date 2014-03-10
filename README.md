@@ -1,4 +1,4 @@
-# text
+# export
 
 A [RequireJS](http://requirejs.org)/AMD loader plugin for loading text
 resources and exporting separate strings separated on <!-- export name="someProperty" -->.
