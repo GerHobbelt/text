@@ -1,0 +1,22 @@
+{
+  "name": "requirejs-text",
+  "main": "text.js",
+  "version": "2.0.13",
+  "homepage": "https://github.com/flovilmart/text",
+  "authors": [
+    "Florent Vilmart <vfloz@me.com>"
+  ],
+  "description": "Require js text",
+  "keywords": [
+    "requirejs",
+    "text"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
