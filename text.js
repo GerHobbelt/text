@@ -14,6 +14,7 @@ define(['module'], function (module) {
     var text, fs, Cc, Ci, xpcIsWindows,
         progIds = ['Msxml2.XMLHTTP', 'Microsoft.XMLHTTP', 'Msxml2.XMLHTTP.4.0'],
         exportRegExp = /(<!--\s*?export\s+?name[\:\=]([\'\"])[a-zA-Z]+?\w*?\2\s*?-->)[\s\S]+?((?=<!--\s*?export(\s+?name[\:\=]([\'\"])[a-zA-Z]+?\w*?\5)?\s*?-->)|(?:(?![\S\s])))/g,
+        importRegExp = /(<!--\s*?import\s+?name[\:\=]([\'\"]).+?\2\s*?-->)/g,
         xmlRegExp = /^\s*<\?xml(\s)+version=[\'\"](\d)*.(\d)*[\'\"](\s)*\?>/im,
         bodyRegExp = /<body[^>]*>\s*([\s\S]+)\s*<\/body>/im,
         hasLocation = typeof location !== 'undefined' && location.href,
@@ -22,6 +23,11 @@ define(['module'], function (module) {
         defaultPort = hasLocation && (location.port || undefined),
         buildMap = {},
         masterConfig = (module.config && module.config()) || {};
+    var makeImportReplace = function(match, importedName) {
+        return function(importedContent, content) {
+             return content.substring(0, match.index) + importedContent[importedName] + content.substring(match.length+match.index);  
+        };
+    };
 
     text = {
         version: '2.0.13+',
@@ -62,6 +68,26 @@ define(['module'], function (module) {
                 }
             }
             return exports;
+        },
+        imp: function (content) {
+            //finds all <!-- import name:"" --> declarations so that
+            //the module will export strings found until the next 
+            //export comment or until the end of document with the 
+            //name:"" attribute being the property of the exported object
+            //if no name attribute exists, then it will not be exported
+            //so an empty export can be used to end a previous export
+            //without creating a new one
+            var imports = null;
+            var impReg=new RegExp(importRegExp);
+            var match;
+            if (content) {
+                while (match =impReg.exec(content)) {
+                    var importName = match.toString().match(/(<!--\s*?import\s*?name[\:\=]")(.*?)\"\s*?-->/);
+                    importName = importName.slice(-1)[0];
+                    imports[importName] = makeImportReplace(match, importName);
+                }
+            }
+            return imports;
         },
 
         jsEscape: function (content) {
@@ -181,13 +207,22 @@ define(['module'], function (module) {
 
         finishLoad: function (name, extra, content, onLoad) {
             content = extra.strip ? text.strip(content) : content;
-            var exports = extra.exp ? text.exp(content, name) : content;
-            content = exports || content;
-            if (masterConfig.isBuild) {
-                buildMap[name] = content;
-            }
-            onLoad(content);
-            return content;
+            var imports = text.imp(content,name);
+            var keys = Object.keys(imports);
+            require(keys,function(){
+                for (var i = keys.length - 1; i >= 0; i--) {
+                    var key=keys[i];
+                    content=imports[key](arguments[i],content);
+                }
+                var exports = extra.exp ? text.exp(content, name) : content;
+                content = exports || content;
+                if (masterConfig.isBuild) {
+                    buildMap[name] = content;
+                }
+                onLoad(content);
+                return content;
+
+            });
         },
 
         load: function (name, req, onLoad, config) {
