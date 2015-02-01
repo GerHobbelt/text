@@ -14,7 +14,6 @@ define(['module'], function (module) {
     var text, fs, Cc, Ci, xpcIsWindows,
         progIds = ['Msxml2.XMLHTTP', 'Microsoft.XMLHTTP', 'Msxml2.XMLHTTP.4.0'],
         exportRegExp = /(<!--\s*?export\s+?name[\:\=]([\'\"])[a-zA-Z]+?\w*?\2\s*?-->)[\s\S]+?((?=<!--\s*?export(\s+?name[\:\=]([\'\"])[a-zA-Z]+?\w*?\5)?\s*?-->)|(?:(?![\S\s])))/g,
-        importRegExp = /(<!--\s*?import\s+?name[\:\=]([\'\"]).+?\2\s*?-->)/g,
         xmlRegExp = /^\s*<\?xml(\s)+version=[\'\"](\d)*.(\d)*[\'\"](\s)*\?>/im,
         bodyRegExp = /<body[^>]*>\s*([\s\S]+)\s*<\/body>/im,
         hasLocation = typeof location !== 'undefined' && location.href,
@@ -23,10 +22,12 @@ define(['module'], function (module) {
         defaultPort = hasLocation && (location.port || undefined),
         buildMap = {},
         masterConfig = (module.config && module.config()) || {};
-    var makeImportReplace = function(match, importedName) {
-        return function(importedContent, content) {
-             return content.substring(0, match.index) + importedContent[importedName] + content.substring(match.length+match.index);  
+    var makeImportReplace = function(match, importName) {
+        var imp= function(importedContent, content) {
+             return content.substring(0, match.index) + importedContent + content.substring(match[0].length+match.index);  
         };
+        imp.importName=importName;
+        return imp;
     };
 
     text = {
@@ -63,7 +64,7 @@ define(['module'], function (module) {
                 for (_i = 0, _len = matches.length; _i < _len; _i++) {
                     match = matches[_i];
                     var exportName = match.match(/(<!--\s*?export\s*?name[\:\=]")(.*?)\"\s*?-->/);
-                    exportName = exportName.slice(-1)[0]
+                    exportName = exportName.slice(-1)[0];
                     exports[exportName] = match.replace(/<!--\s*?export[^>]*>/, '');
                 }
             }
@@ -77,14 +78,14 @@ define(['module'], function (module) {
             //if no name attribute exists, then it will not be exported
             //so an empty export can be used to end a previous export
             //without creating a new one
-            var imports = null;
-            var impReg=new RegExp(importRegExp);
+            var imports = [];
+            var impReg=/<!--\s*?import\s+?name[\:\=]([\'\"]).+?\1\s*?-->/g;
             var match;
             if (content) {
                 while (match =impReg.exec(content)) {
                     var importName = match.toString().match(/(<!--\s*?import\s*?name[\:\=]")(.*?)\"\s*?-->/);
                     importName = importName.slice(-1)[0];
-                    imports[importName] = makeImportReplace(match, importName);
+                    imports.push(makeImportReplace(match,importName));
                 }
             }
             return imports;
@@ -208,11 +209,13 @@ define(['module'], function (module) {
         finishLoad: function (name, extra, content, onLoad) {
             content = extra.strip ? text.strip(content) : content;
             var imports = text.imp(content,name);
-            var keys = Object.keys(imports);
+            var keys=[];
+            for (var i = 0; i <= imports.length - 1; i++) {
+                keys.push(imports[i].importName);
+            }
             require(keys,function(){
                 for (var i = keys.length - 1; i >= 0; i--) {
-                    var key=keys[i];
-                    content=imports[key](arguments[i],content);
+                    content=imports[i](arguments[i],content);
                 }
                 var exports = extra.exp ? text.exp(content, name) : content;
                 content = exports || content;
