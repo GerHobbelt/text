@@ -13,7 +13,7 @@ define(['module'], function (module) {
 
     var text, fs, Cc, Ci, xpcIsWindows,
         progIds = ['Msxml2.XMLHTTP', 'Microsoft.XMLHTTP', 'Msxml2.XMLHTTP.4.0'],
-        exportRegExp = /(<!--\s*?export\s+?name[\:\=]([\'\"])[a-zA-Z]+?\w*?\2\s*?-->)[\s\S]+?((?=<!--\s*?export(\s+?name[\:\=]([\'\"])[a-zA-Z]+?\w*?\5)?\s*?-->)|(?:(?![\S\s])))/g,
+        exportRegExp = /(<!--\s*?export\s+?name[\:\=]([\'\"])[a-zA-Z]+?[\w\.]*?\2\s*?-->)[\s\S]+?((?=<!--\s*?export(\s+?name[\:\=]([\'\"])[a-zA-Z]+?[\w\.]*?\5)?\s*?-->)|(?:(?![\S\s])))/g,
         xmlRegExp = /^\s*<\?xml(\s)+version=[\'\"](\d)*.(\d)*[\'\"](\s)*\?>/im,
         bodyRegExp = /<body[^>]*>\s*([\s\S]+)\s*<\/body>/im,
         hasLocation = typeof location !== 'undefined' && location.href,
@@ -22,9 +22,17 @@ define(['module'], function (module) {
         defaultPort = hasLocation && (location.port || undefined),
         buildMap = {},
         masterConfig = (module.config && module.config()) || {};
-    var makeImportReplace = function(match, importName) {
-        var imp= function(importedContent, content) {
-             return content.substring(0, match.index) + importedContent + content.substring(match[0].length+match.index);  
+    var makeImportReplace = function(match, importName, importPath) {
+        var imp= function(importedContent, content, includePath) {
+            if (!includePath) {
+                for (var i = 0; i < importPath.length; i++) {
+                    importedContent = importedContent[importPath[i]];
+                }
+            }
+            else{
+                importedContent = importedContent+(importPath.length? ('.'+importPath.join('.')) : '')+'+\'';
+            }
+            return content.substring(0, match.index) + importedContent +content.substring(match[0].length+match.index);  
         };
         imp.importName=importName;
         return imp;
@@ -49,43 +57,45 @@ define(['module'], function (module) {
             return content;
         },
         exp: function (content) {
-            //finds all <!-- export name:"" --> declarations so that
+            //finds all <!-- export name:"property" --> declarations so that
             //the module will export strings found until the next 
             //export comment or until the end of document with the 
-            //name:"" attribute being the property of the exported object
+            //name:"property" attribute being the property of the exported object
             //if no name attribute exists, then it will not be exported
             //so an empty export can be used to end a previous export
             //without creating a new one
             var exports = null;
+            var objTraverse=null;
             if (content) {
                 var matches = content.match(exportRegExp) || [],
                     match, _i, _len;
                 exports = matches.length ? {} : null;
                 for (_i = 0, _len = matches.length; _i < _len; _i++) {
                     match = matches[_i];
-                    var exportName = match.match(/(<!--\s*?export\s*?name[\:\=]")(.*?)\"\s*?-->/);
+                    var exportName = match.match(/(<!--\s*?export\s*?name[\:\=](['"]))(.*?)\2\s*?-->/);
                     exportName = exportName.slice(-1)[0];
-                    exports[exportName] = match.replace(/<!--\s*?export[^>]*>/, '');
+                    exportName = exportName.split('.');
+                    objTraverse=exports;
+                    for (var _in = 0; _in+1 < exportName.length; _in++) {
+                        objTraverse=(objTraverse[exportName[_in]]=objTraverse[exportName[_in]]||{});
+                    }
+                    objTraverse[exportName[_in]]=objTraverse[exportName[_in]]=match.replace(/<!--\s*?export[^>]*>/, '');
                 }
             }
             return exports;
         },
         imp: function (content) {
-            //finds all <!-- import name:"" --> declarations so that
-            //the module will export strings found until the next 
-            //export comment or until the end of document with the 
-            //name:"" attribute being the property of the exported object
-            //if no name attribute exists, then it will not be exported
-            //so an empty export can be used to end a previous export
-            //without creating a new one
+            //finds all <!-- import name:"text!stuff!export" --> declarations so that
+            //the module will import modules with the name attribute
+            //
             var imports = [];
-            var impReg=/<!--\s*?import\s+?name[\:\=]([\'\"]).+?\1\s*?-->/g;
+            var impReg=/<!--\s*?import\s+?((name|path)[\:\=]([\'\"])).+?\3\s*?-->/g;
             var match;
             if (content) {
                 while (match =impReg.exec(content)) {
-                    var importName = match.toString().match(/(<!--\s*?import\s*?name[\:\=]")(.*?)\"\s*?-->/);
-                    importName = importName.slice(-1)[0];
-                    imports.push(makeImportReplace(match,importName));
+                    var importName = /<!--\s*?import\s+?.*?((name)[\:\=]([\'\"]))(.+?)\3/.exec(match.toString()).slice(-1)[0];
+                    var importPath = (/<!--\s*?import\s+?.*?((path)[\:\=]([\'\"]))(.+?)\3/.exec(match.toString())|| []).slice(-1)[0];
+                    imports.push(makeImportReplace(match,importName,importPath?importPath.split('.'):[]));
                 }
             }
             return imports;
@@ -206,16 +216,18 @@ define(['module'], function (module) {
                    ((!uPort && !uHostName) || uPort === port);
         },
 
-        finishLoad: function (name, extra, content, onLoad) {
+        finishLoad: function (name, extra, content, onLoad, req) {
             content = extra.strip ? text.strip(content) : content;
-            var imports = text.imp(content,name);
+            var imports = text.imp(content);
             var keys=[];
             for (var i = 0; i <= imports.length - 1; i++) {
                 keys.push(imports[i].importName);
             }
-            require(keys,function(){
-                for (var i = keys.length - 1; i >= 0; i--) {
-                    content=imports[i](arguments[i],content);
+            req(keys,function(){
+                if (keys.length && arguments[0]) {
+                    for (var i = keys.length - 1; i >= 0; i--) {
+                        content = imports[i](arguments[i], content);
+                    }
                 }
                 var exports = extra.exp ? text.exp(content, name) : content;
                 content = exports || content;
@@ -261,7 +273,7 @@ define(['module'], function (module) {
             //Load the text. Use XHR if possible and in a browser.
             if (!hasLocation || useXhr(url, defaultProtocol, defaultHostName, defaultPort)) {
                 text.get(url, function (content) {
-                    text.finishLoad(name, parsed.extra, content, onLoad);
+                    text.finishLoad(name, parsed.extra, content, onLoad,req);
                 }, function (err) {
                     if (onLoad.error) {
                         onLoad.error(err);
@@ -274,17 +286,17 @@ define(['module'], function (module) {
                 //!strip part to avoid file system issues.
                 req([nonStripName], function (content) {
                     text.finishLoad(parsed.moduleName + '.' + parsed.ext,
-                                    parsed.extra, content, onLoad);
+                                    parsed.extra, content, onLoad, req);
                 });
             }
         },
-
         write: function (pluginName, moduleName, write, config) {
+            var keys;
             pluginName = pluginName.split('port').join('');
             if (buildMap.hasOwnProperty(moduleName)) {
                 var content = buildMap[moduleName];
                 if (typeof (content) != 'string') {
-                    var keys = Object.keys(content)
+                    keys = Object.keys(content);
                     var key, _i, _len;
 
                     for (_i = 0, _len = keys.length; _i < _len; _i++) {
@@ -296,22 +308,32 @@ define(['module'], function (module) {
                 else {
                     content = text.jsEscape(content);
                 }
+                var imports = text.imp(content);
+                keys=[];
+                for (i = 0; i <= imports.length - 1; i++) {
+                    keys.push(imports[i].importName);
+                }
+                if (keys.length && arguments[0]) {
+                    for (i = keys.length - 1; i >= 0; i--) {
+                        content = imports[i]("\'+arguments["+i+"]", content, true);
+                    }
+                }
                 var doesExport = moduleName.indexOf('!export') != -1;
+                var deps=keys.length?"['"+keys.join("','")+"'],":"";
                 if (!doesExport) {
                     write.asModule(pluginName + "!" + moduleName,
-                               "define(function () { return '" +
-                                   content +
-                               "';});\n");
+                        "define("+deps+"function () { return '" +
+                        content +
+                        "';});\n");
                 } else {
                     write.asModule(pluginName + "!" + moduleName,
-                               "define(function () { return " +
-                                   content +
-                               ";});\n");
+                        "define("+deps+"function () { return " +
+                        content +
+                        ";});\n");
 
                 }
             }
         },
-
         writeFile: function (pluginName, moduleName, req, write, config) {
             var parsed = text.parseName(moduleName),
                 extPart = parsed.ext ? '.' + parsed.ext : '',

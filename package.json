@@ -1,18 +1,18 @@
 {
-    "name": "text",
+    "name": "importExport",
     "version": "2.0.13",
     "description": "An AMD loader plugin for loading text resources.",
     "categories": [
         "Loader plugins"
     ],
-    "main": "text.js",
-    "github": "https://github.com/requirejs/text",
+    "main": "importExport.js",
+    "github": "https://github.com/requirejs/importExport",
     "bugs": {
-        "web": "https://github.com/requirejs/text/issues"
+        "web": "https://github.com/requirejs/importExport/issues"
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/requirejs/text.git"
+        "url": "https://github.com/requirejs/importExport.git"
     },
     "licenses": [
         {
@@ -25,6 +25,6 @@
         }
     ],
     "volo": {
-        "url": "https://raw.github.com/requirejs/text/{version}/text.js"
+        "url": "https://raw.github.com/requirejs/importExport/{version}/importExport.js"
     }
 }

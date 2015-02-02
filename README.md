@@ -1,4 +1,4 @@
-# export
+# import/export
 
 A [RequireJS](http://requirejs.org)/AMD loader plugin for loading text
 resources and exporting separate strings separated on `<!-- export name="someProperty" -->`.
@@ -13,27 +13,42 @@ See the [RequireJS API text section](http://requirejs.org/docs/api.html#text).
 
 ## Usage
 
-
-
+Here's an example `some/module.html`
+```html
+<!-- export name:'things.stuff' -->
+<p>stuff got imported</p>
+<!-- export --><!-- export name:'things.otherStuff' -->
+<p>other stuff got imported</p>
+<!-- export -->
+```
 You can specify an export text file resource as a dependency like so:
 
 ```javascript
 require(["text!some/module.html!export"],
     function(html) {
-        //the html variable will be an object of the
-        //some/module.html file, with all the text
-        //between <!-- export name="someExportName" -->
-        //and the next <!-- export --> comment
-        //accessible like 'html.someExportName'
-        //If no <!-- export --> is found, the
-        //plugin will default to html as a string
+        var obj = html.things;
+        var subProp = obj.stuff;
+        var otherSubProp = obj.otherStuff;
     }
 );
 ```
-The <!-- export --> comment is found through regex, so nested objects are not possible. It ignores exports with no property name, but any <!-- export --> comment will end the previous export.
+
+Another thing we can do is import it directly into another text module
+
+Here's an example `some/parentModule.html`
+```html
+<h4><!-- import name="text!some/module.html!export" path="again.stuff" --></h4>
+<h4><!-- import path="again.otherStuff" name="text!some/module.html!export" --></h4>
+<h4><!-- import name="text!some/module.html" --></h4>
+```
+
+These will now import the strings from the other module directly into the `<h4>` tags;
+
+
+The `<!-- export -->` comment is found through regex, so nested objects are not possible. It ignores exports with no property name, but any `<!-- export -->` comment will end the previous export.
 [The regex works like this](https://regex101.com/r/qB2qY7/1).
 
-It then removes the <!-- export --> comments from the text. All spaces are preserved.
+It then removes the `<!-- export -->` comments from the text. All spaces are preserved.
 
 It also works with the strip command
 
