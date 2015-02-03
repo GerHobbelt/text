@@ -1,11 +1,11 @@
 {
     "name": "importExport",
-    "version": "2.0.13",
+    "version": "1.0.0",
     "description": "An AMD loader plugin for loading text resources.",
     "categories": [
         "Loader plugins"
     ],
-    "main": "importExport.js",
+    "main": "text.js",
     "github": "https://github.com/requirejs/importExport",
     "bugs": {
         "web": "https://github.com/requirejs/importExport/issues"
